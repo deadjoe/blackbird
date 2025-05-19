@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
+import Foundation
 
 struct ArticleListView: View {
     @Environment(\.modelContext) private var modelContext
     var feed: Feed
     @State private var viewModel: ArticleViewModel!
-    
+
     var body: some View {
         List {
             ForEach(feed.articles.sorted(by: { ($0.pubDate ?? Date.distantPast) > ($1.pubDate ?? Date.distantPast) })) { article in
@@ -14,23 +15,23 @@ struct ArticleListView: View {
                         Text(article.title)
                             .font(.headline)
                             .foregroundColor(article.isRead ? .secondary : .primary)
-                        
-                        if let description = article.description, !description.isEmpty {
-                            Text(description)
+
+                        if let description = article.articleDescription, !description.isEmpty {
+                            Text(description.cleanHTMLTags())
                                 .font(.caption)
                                 .lineLimit(2)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         HStack {
                             if let pubDate = article.pubDate {
                                 Text(pubDate.formatted(.relative(presentation: .named)))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
-                            
+
                             Spacer()
-                            
+
                             if article.isStarred {
                                 Image(systemName: "star.fill")
                                     .foregroundColor(.yellow)
@@ -47,7 +48,7 @@ struct ArticleListView: View {
                         Label(article.isStarred ? "Unstar" : "Star", systemImage: article.isStarred ? "star.slash" : "star")
                     }
                     .tint(.yellow)
-                    
+
                     if !article.isRead {
                         Button {
                             viewModel.markAsRead(article)
@@ -81,13 +82,13 @@ struct ArticleListView: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Feed.self, Article.self, configurations: config)
-    
+
     let feed = Feed(title: "Sample Feed", url: URL(string: "https://example.com")!)
     let article1 = Article(title: "Article 1", pubDate: Date())
     let article2 = Article(title: "Article 2", pubDate: Date().addingTimeInterval(-3600))
-    
+
     feed.articles = [article1, article2]
-    
+
     return NavigationStack {
         ArticleListView(feed: feed)
     }

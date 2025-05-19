@@ -4,10 +4,10 @@ import SwiftData
 struct FeedListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var feeds: [Feed]
-    @State private var viewModel: FeedListViewModel!
+    @StateObject private var viewModel = FeedListViewModel()
     @State private var showingAddFeed = false
     @State private var newFeedURL = ""
-    
+
     var body: some View {
         NavigationStack {
             List {
@@ -17,22 +17,22 @@ struct FeedListView: View {
                             VStack(alignment: .leading) {
                                 Text(feed.title)
                                     .font(.headline)
-                                
-                                if let description = feed.description, !description.isEmpty {
+
+                                if let description = feed.feedDescription, !description.isEmpty {
                                     Text(description)
                                         .font(.caption)
                                         .lineLimit(1)
                                 }
-                                
+
                                 if let lastUpdated = feed.lastUpdated {
                                     Text("Updated: \(lastUpdated.formatted(.relative(presentation: .named)))")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
                             }
-                            
+
                             Spacer()
-                            
+
                             if feed.isStarred {
                                 Image(systemName: "star.fill")
                                     .foregroundColor(.yellow)
@@ -45,14 +45,14 @@ struct FeedListView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
-                        
+
                         Button {
                             viewModel.toggleStarred(feed: feed)
                         } label: {
                             Label(feed.isStarred ? "Unstar" : "Star", systemImage: feed.isStarred ? "star.slash" : "star")
                         }
                         .tint(.yellow)
-                        
+
                         Button {
                             Task {
                                 await viewModel.refreshFeed(feed)
@@ -82,7 +82,7 @@ struct FeedListView: View {
                                 .autocapitalization(.none)
                                 .keyboardType(.URL)
                         }
-                        
+
                         Section {
                             Button("Add Feed") {
                                 Task {
@@ -94,7 +94,7 @@ struct FeedListView: View {
                                 }
                             }
                             .disabled(newFeedURL.isEmpty || viewModel.isLoading)
-                            
+
                             if viewModel.isLoading {
                                 HStack {
                                     Spacer()
@@ -102,7 +102,7 @@ struct FeedListView: View {
                                     Spacer()
                                 }
                             }
-                            
+
                             if let errorMessage = viewModel.errorMessage {
                                 Text(errorMessage)
                                     .foregroundColor(.red)
@@ -125,7 +125,7 @@ struct FeedListView: View {
             }
         }
         .onAppear {
-            viewModel = FeedListViewModel(modelContext: modelContext)
+            viewModel.setModelContext(modelContext)
         }
     }
 }
