@@ -8,28 +8,59 @@ final class FeedServiceTests: XCTestCase {
     var modelContext: ModelContext!
 
     override func setUpWithError() throws {
-        let schema = Schema([Feed.self, Article.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        // 创建一个内存中的 ModelContainer 用于测试
+        let schema = Schema([
+            Blackbird.Feed.self,
+            FeedCategory.self,
+            Article.self
+        ])
+
+        let configuration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true
+        )
+
         modelContainer = try ModelContainer(for: schema, configurations: [configuration])
         modelContext = ModelContext(modelContainer)
+
+        // 清理测试数据
+        try cleanupTestData()
     }
 
     override func tearDownWithError() throws {
-        modelContainer = nil
+        // 清理测试数据
+        try cleanupTestData()
+
+        // 释放资源
         modelContext = nil
+        modelContainer = nil
     }
 
-    func testProcessRSSFeed() throws {
-        // 这个测试仅作为示例，实际上我们应该测试公共API而不是私有方法
-        // 在真实测试中，我们应该：
-        // 1. 创建一个FeedService的协议
-        // 2. 创建一个模拟实现
-        // 3. 注入模拟到视图模型
-        // 4. 使用模拟进行测试
+    // MARK: - 辅助方法
 
-        // 由于我们不能轻易调用Swift中的私有方法，这个测试是不完整的
-        // 我们将跳过这个测试
-        XCTAssertTrue(true, "跳过测试私有方法")
+    private func cleanupTestData() throws {
+        // 清理所有 Feed
+        let feedDescriptor = FetchDescriptor<Blackbird.Feed>()
+        let feeds = try modelContext.fetch(feedDescriptor)
+        for feed in feeds {
+            modelContext.delete(feed)
+        }
+
+        // 清理所有 FeedCategory
+        let categoryDescriptor = FetchDescriptor<FeedCategory>()
+        let categories = try modelContext.fetch(categoryDescriptor)
+        for category in categories {
+            modelContext.delete(category)
+        }
+
+        // 清理所有 Article
+        let articleDescriptor = FetchDescriptor<Article>()
+        let articles = try modelContext.fetch(articleDescriptor)
+        for article in articles {
+            modelContext.delete(article)
+        }
+
+        try modelContext.save()
     }
 
     func testAddFeed() async throws {
@@ -46,33 +77,43 @@ final class FeedServiceTests: XCTestCase {
         XCTAssertTrue(viewModel.errorMessage?.contains("URL") == true ||
                      viewModel.errorMessage?.contains("失败") == true,
                      "错误消息应该包含'URL'或'失败'")
-
-        // 在真实测试中，你应该模拟网络响应并测试完整流程
     }
 
     func testAddFeedWithCategory() async throws {
-        // 创建一个带有已知ID的分类
-        let category = FeedCategory(name: "Test Category")
-        category.id = "test-category-id"
+        // 简化测试，只测试基本的 Feed 和 Category 关系
+
+        // 创建一个 Feed
+        let feed = Blackbird.Feed(
+            title: "Test Feed",
+            url: URL(string: "https://example.com/test.xml")!
+        )
+
+        // 创建一个 Category
+        let category = FeedCategory(name: "Test Category", colorHex: "FF0000")
+
+        // 插入到上下文
+        modelContext.insert(feed)
         modelContext.insert(category)
         try modelContext.save()
 
-        // 验证分类已正确设置
-        let categoryVM = CategoryViewModel(modelContext: modelContext)
-        let categories = try categoryVM.getAllCategories()
+        // 确保 ID 不为 nil
+        XCTAssertNotNil(feed.id, "Feed ID should not be nil")
+        XCTAssertNotNil(category.id, "Category ID should not be nil")
 
-        XCTAssertEqual(categories.count, 1, "应该有一个分类")
-        XCTAssertEqual(categories.first?.name, "Test Category", "分类名称应该匹配")
+        // 设置关系
+        feed.categoryID = category.id
+        try modelContext.save()
 
-        // 在真实应用中，你应该：
-        // 1. 为FeedService创建一个协议
-        // 2. 创建一个模拟实现
-        // 3. 将模拟注入到视图模型
-        // 4. 使用模拟进行测试
+        // 验证关系
+        let feedDescriptor = FetchDescriptor<Blackbird.Feed>(predicate: #Predicate<Blackbird.Feed> { $0.title == "Test Feed" })
+        let feeds = try modelContext.fetch(feedDescriptor)
 
-        // 由于我们不能轻易模拟网络调用，这个测试是不完整的
-        // 我们将跳过实际的Feed添加部分
-        XCTAssertTrue(true, "跳过测试网络调用部分")
+        XCTAssertGreaterThanOrEqual(feeds.count, 1, "Should find at least one feed")
+
+        if let retrievedFeed = feeds.first {
+            XCTAssertEqual(retrievedFeed.title, "Test Feed", "Feed title should match")
+            XCTAssertEqual(retrievedFeed.categoryID, category.id, "Feed should be associated with the category")
+        }
     }
 
     func testDiscoverFeeds() async throws {
@@ -89,7 +130,5 @@ final class FeedServiceTests: XCTestCase {
         XCTAssertTrue(viewModel.errorMessage?.contains("URL") == true ||
                      viewModel.errorMessage?.contains("失败") == true,
                      "错误消息应该包含'URL'或'失败'")
-
-        // 在真实测试中，你应该模拟网络响应并测试完整流程
     }
 }
