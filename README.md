@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="blackbird.png" alt="Blackbird Logo" width="200"/>
+  <img src="blackbird.png" alt="Blackbird Logo" width="256">
 </p>
 
 <h1 align="center">Blackbird</h1>
