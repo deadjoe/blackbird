@@ -1,7 +1,9 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Observation
 
+@MainActor
 @Observable
 class CategoryViewModel {
     private let modelContext: ModelContext

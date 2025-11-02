@@ -1,7 +1,9 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Observation
 
+@MainActor
 @Observable
 class FeedListViewModel: ObservableObject {
     private var modelContext: ModelContext?
@@ -103,8 +105,8 @@ class FeedListViewModel: ObservableObject {
             let (_, newArticles) = try await feedService.fetchFeed(from: feed.url, category: category)
 
             // 使用GUID和URL避免重复
-            let existingGUIDs = feed.articles.compactMap { $0.guid }
-            let existingURLs = feed.articles.compactMap { $0.link }
+            let existingGUIDs = Set(feed.articles.compactMap { $0.guid })
+            let existingURLs = Set(feed.articles.compactMap { $0.link })
 
             var addedCount = 0
 
@@ -150,56 +152,47 @@ class FeedListViewModel: ObservableObject {
             let allFeeds = try context.fetch(descriptor)
 
             var totalNewArticles = 0
+            var failedFeeds: [String] = []
 
-            // 使用任务组并行刷新所有Feed
-            await withTaskGroup(of: Int.self) { group in
-                for feed in allFeeds {
-                    group.addTask {
-                        do {
-                            // 获取分类
-                            let categoryID = feed.categoryID
-                            var category: FeedCategory? = nil
-                            if let categoryID = categoryID {
-                                let categoryDescriptor = FetchDescriptor<FeedCategory>(
-                                    predicate: #Predicate { $0.id == categoryID }
-                                )
-                                category = try? context.fetch(categoryDescriptor).first
-                            }
+            for feed in allFeeds {
+                do {
+                    // 获取分类
+                    let categoryID = feed.categoryID
+                    var category: FeedCategory? = nil
+                    if let categoryID = categoryID {
+                        let categoryDescriptor = FetchDescriptor<FeedCategory>(
+                            predicate: #Predicate { $0.id == categoryID }
+                        )
+                        category = try context.fetch(categoryDescriptor).first
+                    }
 
-                            let (_, newArticles) = try await self.feedService.fetchFeed(from: feed.url, category: category)
+                    let (_, newArticles) = try await feedService.fetchFeed(from: feed.url, category: category)
 
-                            // 使用GUID和URL避免重复
-                            let existingGUIDs = feed.articles.compactMap { $0.guid }
-                            let existingURLs = feed.articles.compactMap { $0.link }
+                    // 使用GUID和URL避免重复
+                    let existingGUIDs = Set(feed.articles.compactMap { $0.guid })
+                    let existingURLs = Set(feed.articles.compactMap { $0.link })
 
-                            var addedCount = 0
+                    var addedCount = 0
 
-                            // 添加新文章
-                            for article in newArticles {
-                                let isNew = (article.guid == nil || !existingGUIDs.contains(article.guid!)) &&
-                                            (article.link == nil || !existingURLs.contains(article.link!))
+                    // 添加新文章
+                    for article in newArticles {
+                        let isNew = (article.guid == nil || !existingGUIDs.contains(article.guid!)) &&
+                                    (article.link == nil || !existingURLs.contains(article.link!))
 
-                                if isNew {
-                                    feed.articles.append(article)
-                                    context.insert(article)
-                                    addedCount += 1
-                                }
-                            }
-
-                            // 更新Feed信息
-                            feed.lastUpdated = Date()
-                            feed.updateUnreadCount()
-
-                            return addedCount
-                        } catch {
-                            return 0
+                        if isNew {
+                            feed.articles.append(article)
+                            context.insert(article)
+                            addedCount += 1
                         }
                     }
-                }
 
-                // 收集结果
-                for await count in group {
-                    totalNewArticles += count
+                    // 更新Feed信息
+                    feed.lastUpdated = Date()
+                    feed.updateUnreadCount()
+
+                    totalNewArticles += addedCount
+                } catch {
+                    failedFeeds.append(feed.title)
                 }
             }
 
@@ -207,8 +200,13 @@ class FeedListViewModel: ObservableObject {
 
             if totalNewArticles > 0 {
                 errorMessage = "已添加\(totalNewArticles)篇新文章"
-            } else {
+            } else if failedFeeds.isEmpty {
                 errorMessage = "没有新文章"
+            }
+
+            if !failedFeeds.isEmpty {
+                let failedList = failedFeeds.joined(separator: "、")
+                errorMessage = (errorMessage ?? "") + (errorMessage == nil ? "" : "；") + "以下订阅刷新失败：\(failedList)"
             }
         } catch {
             errorMessage = "刷新所有Feed失败: \(error.localizedDescription)"

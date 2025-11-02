@@ -1,7 +1,9 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Observation
 
+@MainActor
 @Observable
 class ArticleViewModel: ObservableObject {
     private var modelContext: ModelContext?

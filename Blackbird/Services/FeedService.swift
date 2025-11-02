@@ -1,6 +1,7 @@
 import Foundation
 import FeedKit
 import SwiftData
+import Observation
 import UIKit
 
 enum FeedError: Error {
